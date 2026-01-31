@@ -2,6 +2,7 @@
 using api_BPhotos.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
+using System.Net;
 
 namespace api_BPhotos.Controllers
 {
@@ -14,7 +15,7 @@ namespace api_BPhotos.Controllers
 
 
         [HttpGet]
-        public IEnumerable<Photo> GetLocal()
+        public IEnumerable<Photo> GetPhotos(int page = 1, int pageSize = 30)
         {
             var photos = new List<Photo>();
             var imageFiles = Directory.GetFiles(_storagePath, "*.*", SearchOption.TopDirectoryOnly)
@@ -22,24 +23,33 @@ namespace api_BPhotos.Controllers
                                                      file.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
                                                      file.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
                                                      file.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) ||
-                                                     file.EndsWith(".webp", StringComparison.OrdinalIgnoreCase));
+                                                     file.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
+                                      .Skip((page - 1) * pageSize)
+                                      .Take(pageSize)
+                                      .ToList();
+
             foreach (var filePath in imageFiles)
             {
                 var fileInfo = new FileInfo(filePath);
+                var fileTitle = Path.GetFileName(filePath);
+                var encodedTitle = WebUtility.UrlEncode(fileTitle);
+
                 photos.Add(new Photo
                 {
-                    Title = Path.GetFileName(filePath),
-                    ImageURL = $"http://ip:port/api/photo/show/{Path.GetFileName(filePath)}",
-                    ImageThumbnailURL = $"http://ip:port/api/photo/thumbnail/{Path.GetFileName(filePath)}",
+                    Title = fileTitle,
+                    ImageURL = $"http://ip:port/api/photo/show/{encodedTitle}",
+                    ImageThumbnailURL = $"http://ip:port/api/photo/thumbnail/{encodedTitle}",
                     DateTaken = fileInfo.CreationTime
                 });
             }
             return photos;
         }
 
-        [HttpGet("thumbnail/{title}")]
-        public async Task<IActionResult> GetThumbnail(string title)
+        [HttpGet("thumbnail/{encodedTitle}")]
+        public async Task<IActionResult> GetThumbnail(string encodedTitle)
         {
+            var title = WebUtility.UrlDecode(encodedTitle);
+
             var filePath = Path.Combine(_storagePath, title);
             if (!System.IO.File.Exists(filePath))
             {
@@ -63,9 +73,11 @@ namespace api_BPhotos.Controllers
             return File(thumbnailStream, "image/jpeg");
         }
 
-        [HttpGet("show/{title}")]
-        public IActionResult ShowImage(string title)
+        [HttpGet("show/{encodedTitle}")]
+        public IActionResult ShowImage(string encodedTitle)
         {
+            var title = WebUtility.UrlDecode(encodedTitle);
+
             var filePath = Path.Combine(_storagePath, title);
             if (!System.IO.File.Exists(filePath))
             {
